@@ -1,0 +1,4 @@
+.env
+mtg/config.toml
+xray/.keys
+*.local

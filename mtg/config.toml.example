@@ -1,0 +1,2 @@
+secret = "REPLACE_WITH_SECRET"
+bind-to = "0.0.0.0:3128"

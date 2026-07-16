@@ -1,0 +1,20 @@
+services:
+  xray:
+    image: ghcr.io/xtls/xray-core:latest
+    container_name: xray
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./xray/config.json:/etc/xray/config.json:ro
+    command: run -config /etc/xray/config.json
+    cap_add:
+      - NET_BIND_SERVICE
+
+  mtg:
+    image: nineseconds/mtg:2
+    container_name: mtg
+    restart: unless-stopped
+    ports:
+      - "${MTPROTO_PORT:-8443}:3128"
+    volumes:
+      - ./mtg/config.toml:/config.toml:ro
