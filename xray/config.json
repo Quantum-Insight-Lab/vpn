@@ -37,14 +37,17 @@
           "tls",
           "quic"
         ],
-        "routeOnly": true
+        "routeOnly": false
       }
     }
   ],
   "outbounds": [
     {
       "tag": "direct",
-      "protocol": "freedom"
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4"
+      }
     },
     {
       "tag": "block",
@@ -53,6 +56,13 @@
   ],
   "routing": {
     "rules": [
+      {
+        "type": "field",
+        "outboundTag": "block",
+        "ip": [
+          "::/0"
+        ]
+      },
       {
         "type": "field",
         "outboundTag": "block",
@@ -65,6 +75,14 @@
           "bittorrent"
         ]
       }
-    ]
+    ],
+    "domainStrategy": "AsIs"
+  },
+  "dns": {
+    "servers": [
+      "8.8.8.8",
+      "1.1.1.1"
+    ],
+    "queryStrategy": "UseIPv4"
   }
 }
