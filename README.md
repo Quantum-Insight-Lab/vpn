@@ -150,7 +150,7 @@ docker compose restart mtg
 ### При проблемах
 
 1. Проверить `VPS_IP`, `pbk`, `sid`, `sni` в vless-ссылке
-2. С VPS: `curl -I https://www.microsoft.com` (dest для Reality)
+2. С VPS: `curl -I https://www.cloudflare.com` (dest для Reality)
 3. Сменить `dest` / `serverNames` в `xray/config.json` на другой TLS 1.3 хост
 4. Проверить Security Group Selectel (443, 8443 inbound)
 

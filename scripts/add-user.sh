@@ -41,6 +41,7 @@ jq \
   '.inbounds[0].settings.clients += [{"id": $id, "email": $email, "flow": "xtls-rprx-vision"}]' \
   "$CONFIG_FILE" > "$TMP_CONFIG"
 mv "$TMP_CONFIG" "$CONFIG_FILE"
+chmod 644 "$CONFIG_FILE"
 
 echo "Пользователь добавлен: $LABEL"
 echo "UUID: $USER_UUID"

@@ -3,6 +3,7 @@ services:
     image: ghcr.io/xtls/xray-core:latest
     container_name: xray
     restart: unless-stopped
+    user: "0:0"
     network_mode: host
     volumes:
       - ./xray/config.json:/etc/xray/config.json:ro

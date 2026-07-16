@@ -39,7 +39,7 @@ fi
 
 PUBLIC_KEY="${REALITY_PUBLIC_KEY:-}"
 SHORT_ID="${REALITY_SHORT_ID:-}"
-SNI="${REALITY_SNI:-www.microsoft.com}"
+SNI="${REALITY_SNI:-www.cloudflare.com}"
 PORT="${XRAY_PORT:-443}"
 FLOW="${VLESS_FLOW:-xtls-rprx-vision}"
 FINGERPRINT="${VLESS_FINGERPRINT:-chrome}"

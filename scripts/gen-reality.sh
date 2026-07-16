@@ -49,9 +49,10 @@ jq \
   --arg privateKey "$PRIVATE_KEY" \
   --arg shortId "$SHORT_ID" \
   '.inbounds[0].streamSettings.realitySettings.privateKey = $privateKey
-   | .inbounds[0].streamSettings.realitySettings.shortIds = [$shortId]' \
+   | .inbounds[0].streamSettings.realitySettings.shortIds = [$shortId, ""]' \
   "$CONFIG_FILE" > "$TMP_CONFIG"
 mv "$TMP_CONFIG" "$CONFIG_FILE"
+chmod 644 "$CONFIG_FILE"
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
