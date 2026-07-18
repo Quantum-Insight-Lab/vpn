@@ -1,94 +1,109 @@
-# VPN + MTProto для сотрудников (Selectel KZ)
+# VPN для сотрудников (Selectel KZ)
 
 Стек на одном VPS:
 
-- **Xray** — VLESS + Reality на `443/tcp` (полный туннель интернета)
-- **mtg** — MTProto-прокси для Telegram на `8443/tcp`
+- **Xray** — VLESS + Reality (полный туннель) и SOCKS5/HTTP для Telegram
+- **sslh** — мультиплексор на `443/tcp` (TLS → VLESS, SOCKS5/HTTP → прокси)
+- **Cloudflare WARP** — outbound для DC Telegram (локально в `warp/`, не в git)
+
+MTProto (`mtg`) больше не в default-стеке.
 
 ## Требования
 
 - Ubuntu 22.04/24.04 на VPS Selectel (KZ)
 - Docker + Docker Compose
-- `jq`, `openssl`, `python3`
-- Открытые порты: `443`, `8443`, SSH
+- `jq`, `openssl`, `python3`, `sslh`
+- Открытые порты: `443/tcp`, SSH
+- Аккаунт WARP (`wgcf`) для Telegram-маршрута
+
+## Порты
+
+| Снаружи | Куда | Назначение |
+|---------|------|------------|
+| `443` | sslh | вход: VLESS (TLS/Reality) или SOCKS5/HTTP |
+| — | `127.0.0.1:10443` | Xray VLESS Reality |
+| — | `127.0.0.1:12080` | Xray SOCKS5 |
+| — | `127.0.0.1:12081` | Xray HTTP proxy |
 
 ## Быстрый старт на VPS
 
 ```bash
-# 1. Установка зависимостей
-sudo apt update && sudo apt install -y docker.io docker-compose-v2 jq openssl python3
+# 1. Зависимости
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 jq openssl python3 sslh
 sudo systemctl enable --now docker
-sudo usermod -aG docker "$USER"
-# перелогиниться или: newgrp docker
 
-# 2. Клонировать / скопировать репозиторий
+# 2. Репозиторий
 git clone <repo-url> vpn && cd vpn
-
-# 3. Настроить окружение
 cp .env.example .env
-nano .env   # указать VPS_IP
+nano .env   # VPS_IP=публичный.ip, SOCKS_USER / SOCKS_PASS
 
-# 4. Первичная настройка (ключи + контейнеры)
-./scripts/setup.sh
-
-# 5. Добавить сотрудника
-./scripts/add-user.sh ivan-petrov
-```
-
-Скрипт `add-user.sh` выведет `vless://...` ссылку для клиента.
-
-## Ручная настройка (пошагово)
-
-```bash
-cp .env.example .env
-# VPS_IP=ваш.публичный.ip
-
+# 3. Reality-ключи + Xray
 chmod +x scripts/*.sh
 ./scripts/gen-reality.sh
-./scripts/gen-mtproto.sh
-./scripts/add-user.sh employee-name
-
+# подставьте privateKey/shortId в xray/config.json (или через gen-reality.sh),
+# SOCKS-логин/пароль, REPLACE_VPS_IP в routing → to-socks
 docker compose up -d
-```
 
-## Прокси для Telegram (SOCKS5 / HTTP)
+# 4. sslh на 443
+sudo cp deploy/sslh.cfg /etc/sslh.cfg
+sudo cp deploy/sslh-vpn.service /etc/systemd/system/sslh-vpn.service
+# в unit путь к конфигу: -F /etc/sslh.cfg
+sudo systemctl daemon-reload
+sudo systemctl enable --now sslh-vpn
 
-На `:443` через `sslh` рядом с VLESS (см. `deploy/sslh.cfg`).
+# 5. WARP для Telegram (один раз)
+mkdir -p warp && cd warp
+# установить wgcf, затем:
+wgcf register --accept-tos
+wgcf generate
+# secretKey из wgcf-profile.conf → outbound "warp" в xray/config.json
+cd ..
+docker compose restart xray
 
-1. Установить `sslh`, скопировать unit из `deploy/sslh-vpn.service`
-2. Xray слушает `127.0.0.1:10443` (VLESS), `12080` (SOCKS), `12081` (HTTP)
-3. Telegram → SOCKS5 → `VPS_IP:443` + логин/пароль из `.env`
-4. Трафик к DC Telegram уходит через Cloudflare WARP (`warp/` локально, в git не коммитится)
-
-При включённом VLESS в Telegram лучше **Прокси → Нет**, либо оставить SOCKS — hairpin на `VPS_IP:443` редиректится на локальный SOCKS.
-
-## MTProto для Telegram (опционально)
-
-
-После `./scripts/gen-mtproto.sh`:
-
-```
-tg://proxy?server=<VPS_IP>&port=8443&secret=<secret>
-```
-
-Или `https://t.me/proxy?server=...&port=...&secret=...` — открывается в Telegram.
-
-Проверка ссылок:
-
-```bash
-docker run --rm -v "$PWD/mtg/config.toml:/config.toml:ro" nineseconds/mtg:2 access /config.toml
+# 6. Сотрудник (VPN)
+./scripts/add-user.sh ivan-petrov
 ```
 
 ## Клиенты
 
 | Платформа | VPN (VLESS Reality) | Telegram |
 |-----------|---------------------|----------|
-| Windows   | v2rayN, Nekoray, Hiddify | встроенный MTProto |
-| Android   | Nekobox, Hiddify | встроенный MTProto |
-| iOS       | Streisand, Happ, Hiddify | встроенный MTProto |
-| macOS     | Nekoray, Hiddify | — |
+| Windows   | v2rayN, Nekoray, Hiddify | SOCKS5 на `:443` |
+| Android   | Nekobox, Hiddify | SOCKS5 на `:443` |
+| iOS       | Streisand, Happ, Hiddify | SOCKS5 на `:443` |
+| macOS     | Nekoray, Hiddify | SOCKS5 на `:443` |
 
-Импорт: скопировать `vless://` ссылку → «Import from clipboard» в клиенте. Режим — **глобальный / full tunnel**.
+### VLESS
+
+Импорт `vless://...` из `add-user.sh` → clipboard. Режим — **global / full tunnel**.  
+SNI: `www.cloudflare.com`.
+
+### Telegram (SOCKS5)
+
+Настройки → Данные и память → Прокси → **SOCKS5**:
+
+- Сервер: `VPS_IP`
+- Порт: `443`
+- Логин / пароль: из `.env` (`SOCKS_USER` / `SOCKS_PASS`)
+- Secret: пусто
+
+## Управление доступом
+
+**Добавить сотрудника (VPN):**
+
+```bash
+./scripts/add-user.sh name-surname
+```
+
+**Отозвать VPN:** удалить UUID из `xray/config.json` → `clients[]`, затем:
+
+```bash
+docker compose restart xray
+```
+
+**Сменить пароль SOCKS:** обновить accounts в `socks-in` / `http-in` и `.env`, затем `docker compose restart xray`.
+
+Вести `UUID ↔ сотрудник` отдельно (не в git).
 
 ## Firewall (UFW)
 
@@ -97,12 +112,11 @@ sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow OpenSSH
 sudo ufw allow 443/tcp
-sudo ufw allow 8443/tcp
 sudo ufw enable
 sudo ufw status
 ```
 
-SSH лучше ограничить вашими IP в Selectel Security Groups или через `ufw allow from <office-ip> to any port 22`.
+SSH лучше ограничить вашими IP (Security Groups / `ufw allow from <ip> to any port 22`).
 
 ## Hardening SSH
 
@@ -112,75 +126,52 @@ sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh
 sudo systemctl restart sshd
 ```
 
-## Управление доступом
+## Чеклист проверки
 
-**Добавить сотрудника:**
+### VPN
 
-```bash
-./scripts/add-user.sh name-surname
-```
+- [ ] Клиент подключается (REALITY handshake OK)
+- [ ] `https://ifconfig.me` показывает IP VPS
+- [ ] YouTube / заблокированные сайты открываются
+- [ ] В клиенте remote/routed DNS
 
-**Отозвать VPN-доступ:** удалить UUID из `xray/config.json` → `clients[]`, затем:
+### Telegram
 
-```bash
-docker compose restart xray
-```
-
-**Сменить MTProto secret** (все переподключатся):
-
-```bash
-./scripts/gen-mtproto.sh
-docker compose restart mtg
-```
-
-Вести соответствие `UUID ↔ сотрудник` отдельно (не в git).
-
-## Чеклист проверки из РФ
-
-### VPN (полный туннель)
-
-- [ ] Клиент подключается без ошибок handshake / REALITY
-- [ ] `https://ifconfig.me` показывает IP VPS (KZ), не домашний/офисный
-- [ ] Открываются заблокированные сайты (YouTube, GitHub и т.д.)
-- [ ] DNS не «утекает»: в клиенте включён remote DNS / routed DNS
-- [ ] Переподключение после sleep/wifi-switch работает
-
-### MTProto
-
-- [ ] Ссылка `tg://proxy?...` открывается в Telegram
-- [ ] В Settings → Data and Storage → Proxy — статус Connected
-- [ ] Сообщения и медиа отправляются/принимаются
-- [ ] Работает при выключенном VPN (независимые сервисы)
+- [ ] SOCKS5 `:443` — «Проверить прокси» OK
+- [ ] В `docker compose logs xray` есть `-> warp` на DC `149.154.*` / `91.108.*`
 
 ### Сервер
 
-- [ ] `docker compose ps` — оба контейнера `running`
-- [ ] `ss -tlnp | grep -E ':443|:8443'` — порты слушают
-- [ ] `docker compose logs xray --tail 50` — нет постоянных ошибок
-- [ ] UFW активен, лишние порты закрыты
+- [ ] `docker compose ps` — `xray` Up
+- [ ] `systemctl is-active sslh-vpn` — active
+- [ ] `ss -tlnp | grep -E ':443|:10443|:12080'` — слушают
+- [ ] Диск не 100% (`df -h /`)
 
 ### При проблемах
 
-1. Проверить `VPS_IP`, `pbk`, `sid`, `sni` в vless-ссылке
-2. С VPS: `curl -I https://www.cloudflare.com` (dest для Reality)
-3. Сменить `dest` / `serverNames` в `xray/config.json` на другой TLS 1.3 хост
-4. Проверить Security Group Selectel (443, 8443 inbound)
+1. `VPS_IP`, `pbk`, `sid`, `sni=www.cloudflare.com` в vless-ссылке
+2. С VPS: `curl -I https://www.cloudflare.com`
+3. SOCKS с телефона/ПК только на порт **443**, не 2080
+4. Security Group Selectel: inbound `443/tcp`
 
 ## Структура репозитория
 
 ```
-docker-compose.yml    # xray (host network) + mtg
-xray/config.json      # VLESS Reality inbound
-mtg/config.toml       # генерируется, не в git
+docker-compose.yml       # только xray (host network)
+xray/config.json         # шаблон: VLESS + SOCKS + HTTP + WARP routing
+deploy/
+  sslh.cfg               # мультиплексор 443
+  sslh-vpn.service       # systemd unit
 scripts/
-  setup.sh            # первичный деплой
-  gen-reality.sh      # ключи Reality
-  gen-mtproto.sh      # secret + tg:// ссылка
-  add-user.sh         # UUID + vless ссылка
-  gen-vless-link.sh   # перегенерация ссылки по UUID
+  setup.sh               # Reality + docker up; sslh/WARP — по README
+  gen-reality.sh
+  add-user.sh
+  gen-vless-link.sh
+  gen-mtproto.sh         # опционально, mtg не в compose
 .env.example
+warp/                    # локально, не в git
 ```
 
 ## Секреты
 
-Не коммитить: `.env`, `xray/.keys`, `mtg/config.toml`.
+Не коммитить: `.env`, `xray/.keys`, `mtg/config.toml`, `warp/`.
