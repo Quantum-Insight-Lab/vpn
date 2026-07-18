@@ -44,8 +44,8 @@ else
   echo "  tg://proxy?server=<VPS_IP>&port=${PORT}&secret=${SECRET}"
 fi
 
-if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps mtg 2>/dev/null | grep -q running; then
-  docker compose -f "${ROOT_DIR}/docker-compose.yml" restart mtg
+if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps --status running mtg 2>/dev/null | grep -q mtg; then
+  docker compose -f "${ROOT_DIR}/docker-compose.yml" up -d --force-recreate mtg
   echo
   echo "mtg перезапущен."
 fi

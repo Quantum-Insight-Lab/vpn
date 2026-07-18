@@ -51,7 +51,19 @@ chmod +x scripts/*.sh
 docker compose up -d
 ```
 
-## MTProto для Telegram
+## Прокси для Telegram (SOCKS5 / HTTP)
+
+На `:443` через `sslh` рядом с VLESS (см. `deploy/sslh.cfg`).
+
+1. Установить `sslh`, скопировать unit из `deploy/sslh-vpn.service`
+2. Xray слушает `127.0.0.1:10443` (VLESS), `12080` (SOCKS), `12081` (HTTP)
+3. Telegram → SOCKS5 → `VPS_IP:443` + логин/пароль из `.env`
+4. Трафик к DC Telegram уходит через Cloudflare WARP (`warp/` локально, в git не коммитится)
+
+При включённом VLESS в Telegram лучше **Прокси → Нет**, либо оставить SOCKS — hairpin на `VPS_IP:443` редиректится на локальный SOCKS.
+
+## MTProto для Telegram (опционально)
+
 
 После `./scripts/gen-mtproto.sh`:
 

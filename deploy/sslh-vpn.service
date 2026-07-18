@@ -1,0 +1,13 @@
+[Unit]
+Description=sslh multiplexer for VLESS/SOCKS/HTTP on 443
+After=network.target docker.service
+
+[Service]
+Type=forking
+PIDFile=/run/sslh.pid
+ExecStart=/usr/sbin/sslh -F /opt/vpn/deploy/sslh.cfg
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

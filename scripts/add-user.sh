@@ -47,7 +47,7 @@ echo "Пользователь добавлен: $LABEL"
 echo "UUID: $USER_UUID"
 echo
 
-if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps xray 2>/dev/null | grep -q running; then
+if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps --status running xray 2>/dev/null | grep -q xray; then
   docker compose -f "${ROOT_DIR}/docker-compose.yml" restart xray
   echo "Xray перезапущен."
 fi
