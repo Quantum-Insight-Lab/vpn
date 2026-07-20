@@ -1,2 +1,30 @@
 secret = "REPLACE_WITH_SECRET"
-bind-to = "0.0.0.0:3128"
+bind-to = "127.0.0.1:13128"
+prefer-ip = "only-ipv4"
+public-ipv4 = "REPLACE_VPS_IP"
+concurrency = 8192
+auto-update = false
+tolerate-time-skewness = "5s"
+allow-fallback-on-unknown-dc = true
+
+[network]
+dns = "https://1.1.1.1"
+proxies = [
+  "socks5://REPLACE_SOCKS_USER:REPLACE_SOCKS_PASS@127.0.0.1:12080"
+]
+
+[network.timeout]
+tcp = "10s"
+http = "15s"
+idle = "5m"
+handshake = "15s"
+
+[domain-fronting]
+host = "REPLACE_CF_IP"
+port = 443
+
+[defense.blocklist]
+enabled = false
+
+[defense.anti-replay]
+enabled = true

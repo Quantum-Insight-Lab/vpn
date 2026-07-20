@@ -1,0 +1,16 @@
+[Unit]
+Description=nginx SNI router (VLESS / MTProto)
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/run/nginx-sni.pid
+ExecStartPre=/usr/sbin/nginx -t -c /opt/vpn/nginx/nginx.conf
+ExecStart=/usr/sbin/nginx -c /opt/vpn/nginx/nginx.conf
+ExecReload=/usr/sbin/nginx -s reload -c /opt/vpn/nginx/nginx.conf
+ExecStop=/usr/sbin/nginx -s quit -c /opt/vpn/nginx/nginx.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

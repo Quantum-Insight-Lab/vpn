@@ -1,11 +1,12 @@
 [Unit]
-Description=sslh multiplexer for VLESS/SOCKS/HTTP on 443
+Description=sslh-select multiplexer for VLESS/SOCKS/HTTP on 443
 After=network.target docker.service
 
 [Service]
 Type=forking
 PIDFile=/run/sslh.pid
-ExecStart=/usr/sbin/sslh -F /opt/vpn/deploy/sslh.cfg
+ExecStartPre=/bin/sh -c '/usr/bin/killall -9 sslh 2>/dev/null || true; /usr/bin/killall -9 sslh-fork 2>/dev/null || true; rm -f /run/sslh.pid'
+ExecStart=/usr/sbin/sslh-select -F /etc/sslh.cfg
 Restart=on-failure
 RestartSec=2
 
