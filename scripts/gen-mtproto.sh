@@ -28,7 +28,7 @@ prefer-ip = "only-ipv4"
 public-ipv4 = "${VPS_IP}"
 concurrency = 8192
 auto-update = false
-tolerate-time-skewness = "5s"
+tolerate-time-skewness = "24h"
 allow-fallback-on-unknown-dc = true
 
 [network]
@@ -51,7 +51,7 @@ port = 443
 enabled = false
 
 [defense.anti-replay]
-enabled = true
+enabled = false
 EOT
 chmod 644 "$MTG_CONFIG"
 

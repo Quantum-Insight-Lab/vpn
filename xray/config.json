@@ -140,14 +140,14 @@
       },
       {
         "type": "field",
-        "outboundTag": "warp",
+        "outboundTag": "direct",
         "domain": [
           "geosite:telegram"
         ]
       },
       {
         "type": "field",
-        "outboundTag": "warp",
+        "outboundTag": "direct",
         "ip": [
           "geoip:telegram",
           "91.108.0.0/16",
