@@ -98,6 +98,13 @@
       }
     },
     {
+      "tag": "to-caddy",
+      "protocol": "freedom",
+      "settings": {
+        "redirect": "127.0.0.1:8443"
+      }
+    },
+    {
       "tag": "to-mtg",
       "protocol": "freedom",
       "settings": {
@@ -131,6 +138,13 @@
   "routing": {
     "domainStrategy": "IPIfNonMatch",
     "rules": [
+      {
+        "type": "field",
+        "outboundTag": "to-caddy",
+        "domain": [
+          "full:progress-bot.qip.zone"
+        ]
+      },
       {
         "type": "field",
         "outboundTag": "to-mtg",
