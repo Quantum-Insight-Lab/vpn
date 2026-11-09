@@ -100,6 +100,23 @@
       }
     },
     {
+      "tag": "to-ssh",
+      "protocol": "freedom",
+      "settings": {
+        "redirect": "127.0.0.1:22",
+        "finalRules": [
+          {
+            "action": "allow",
+            "network": "tcp",
+            "port": "22",
+            "ip": [
+              "127.0.0.1/32"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "tag": "block",
       "protocol": "blackhole"
     }
@@ -113,7 +130,8 @@
         "domain": [
           "full:progress-bot.qip.zone",
           "full:proxy.qip.zone"
-        ]
+        ],
+        "port": "443"
       },
       {
         "type": "field",
@@ -139,6 +157,22 @@
         "outboundTag": "block",
         "ip": [
           "::/0"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "to-ssh",
+        "port": "22",
+        "ip": [
+          "85.198.90.240/32"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "to-ssh",
+        "port": "22",
+        "domain": [
+          "full:proxy.qip.zone"
         ]
       },
       {
