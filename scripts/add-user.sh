@@ -38,7 +38,7 @@ TMP_CONFIG="$(mktemp)"
 jq \
   --arg id "$USER_UUID" \
   --arg email "$LABEL" \
-  '.inbounds[0].settings.clients += [{"id": $id, "email": $email, "flow": "xtls-rprx-vision"}]' \
+  '.inbounds[0].settings.clients += [{"id": $id, "email": $email}]' \
   "$CONFIG_FILE" > "$TMP_CONFIG"
 mv "$TMP_CONFIG" "$CONFIG_FILE"
 chmod 644 "$CONFIG_FILE"

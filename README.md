@@ -2,102 +2,78 @@
 
 Стек на одном VPS:
 
-- **Xray** — VLESS + Reality (полный туннель), SOCKS5/HTTP, маршрутизация Telegram через WARP
-- **sslh-select** — мультиплексор на `443/tcp` (TLS / SOCKS5 / HTTP)
-- **nginx stream** — SNI-роутер: `www.cloudflare.com` → VLESS, `cloudflare.com` → MTProto
-- **mtg** — MTProto FakeTLS для Telegram без VLESS (DC через локальный SOCKS → WARP)
-- **Cloudflare WARP** — outbound для DC Telegram (локально в `warp/`, не в git)
+- **Xray** — VLESS + REALITY + XHTTP на `443/tcp`. SNI `proxy.qip.zone`, соединение без ключа уходит на локальный Caddy (self-steal).
+- **Caddy + Telemt** — живой сайт и WEB-прокси Telegram на том же домене. Caddy слушает `127.0.0.1:8443`, снаружи его закрывает Xray. Порт `80/tcp` остаётся у Caddy для выпуска сертификата.
+- **Cloudflare WARP** — единственный выход пользовательского трафика. Адрес входа (`VPS_IP`) в интернет не выпускает клиентов. С адреса узла уходят только служебные соединения: DoH ядра и туннель до `engage.cloudflareclient.com`.
+
+Каталоги `deploy/` (sslh, nginx SNI) и `mtg/` в репозитории сохранены, в эту схему не входят: открытый SOCKS/HTTP на 443 и чужой SNI `cloudflare.com` больше не поднимаются. Сервис `mtg` в Compose выключен профилем и сам не стартует.
 
 ## Требования
 
 - Ubuntu 22.04/24.04 на VPS Selectel (KZ)
 - Docker + Docker Compose
-- `jq`, `openssl`, `python3`, `sslh`, `nginx` + `libnginx-mod-stream`
-- Открытые порты: `443/tcp`, SSH
-- Аккаунт WARP (`wgcf`) для Telegram-маршрута
+- `jq`, `openssl`, `python3`, `wgcf`
+- Открытые порты: `443/tcp`, `80/tcp` (продление сертификата), SSH
+- Аккаунт WARP (`wgcf`) — выход всего туннеля, не только Telegram
 
 ## Порты
 
 | Снаружи | Куда | Назначение |
 |---------|------|------------|
-| `443` | sslh-select | вход: TLS → nginx SNI, SOCKS5/HTTP → Xray |
-| — | `127.0.0.1:10440` | nginx SNI-router |
-| — | `127.0.0.1:10443` | Xray VLESS Reality (`www.cloudflare.com`) |
-| — | `127.0.0.1:13128` | mtg MTProto (`cloudflare.com`) |
-| — | `127.0.0.1:12080` | Xray SOCKS5 (ещё и upstream для mtg) |
-| — | `127.0.0.1:12081` | Xray HTTP proxy |
+| `443` | Xray | VLESS REALITY XHTTP; без ключа — сайт `proxy.qip.zone` |
+| `80` | Caddy | HTTP-01 для сертификата |
+| — | `127.0.0.1:8443` | Caddy, цель REALITY и локальный сайт |
+| — | Telemt в сети compose | WEB-прокси Telegram |
 
 ## Быстрый старт на VPS
 
 ```bash
 # 1. Зависимости
-sudo apt update && sudo apt install -y docker.io docker-compose-v2 jq openssl python3 sslh nginx libnginx-mod-stream
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 jq openssl python3
 sudo systemctl enable --now docker
-sudo systemctl disable --now nginx   # системный nginx на 443 не нужен
 
 # 2. Репозиторий
 git clone <repo-url> vpn && cd vpn
 cp .env.example .env
-nano .env   # VPS_IP, SOCKS_USER / SOCKS_PASS
+nano .env   # VPS_IP
 
-# 3. Reality + MTProto + Xray/mtg
-chmod +x scripts/*.sh
-./scripts/gen-reality.sh
-./scripts/gen-mtproto.sh
-# в xray/config.json: privateKey, shortId, SOCKS accounts,
-# REPLACE_VPS_IP/32 в routing → to-mtg, WARP secretKey
-docker compose up -d
-
-# 4. nginx SNI + sslh на 443
-# в deploy/nginx-sni.service путь к nginx.conf = каталог установки (по умолчанию /opt/vpn)
-sudo cp deploy/nginx-sni.service /etc/systemd/system/nginx-sni.service
-sudo cp deploy/sslh.cfg /etc/sslh.cfg
-sudo cp deploy/sslh-vpn.service /etc/systemd/system/sslh-vpn.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now nginx-sni sslh-vpn
-
-# 5. WARP для Telegram (один раз)
+# 3. WARP, один раз
 mkdir -p warp && cd warp
 wgcf register --accept-tos
 wgcf generate
-# secretKey из wgcf-profile.conf → outbound "warp" в xray/config.json
+# PrivateKey и Address (v4) из wgcf-profile.conf → outbound "warp" в xray/config.json
 cd ..
-docker compose restart xray
 
-# 6. Сотрудник (VPN)
+# 4. Reality и запуск
+chmod +x scripts/*.sh
+./scripts/setup.sh
+
+# 5. Сотрудник (VPN)
 ./scripts/add-user.sh ivan-petrov
 ```
 
+`setup.sh` выпускает ключи REALITY, проверяет конфиг (`xray run -test`), переводит Caddy на `127.0.0.1:8443` и поднимает Xray на `443`.
+
 ## Клиенты
 
-| Платформа | VPN (VLESS Reality) | Telegram без VPN |
-|-----------|---------------------|------------------|
-| Windows   | v2rayN, Nekoray, Hiddify | MTProto-ссылка `:443` |
-| Android   | Nekobox, Hiddify | MTProto-ссылка `:443` |
-| iOS       | Streisand, Happ, Hiddify | MTProto-ссылка `:443` |
-| macOS     | Nekoray, Hiddify | MTProto-ссылка `:443` |
+| Платформа | VPN (VLESS REALITY XHTTP) | Telegram без VPN |
+|-----------|---------------------------|------------------|
+| Windows   | v2rayN, Hiddify | WEB-ссылка `tg://webproxy` |
+| Android   | Hiddify, v2rayNG | WEB, если сборка умеет этот тип |
+| iOS       | Happ, Streisand, Hiddify | WEB-ссылка |
+| macOS     | Hiddify, v2rayN | WEB-ссылка |
 
 ### VLESS
 
-Импорт `vless://...` из `add-user.sh`. Режим — **global / full tunnel**.  
-SNI: `www.cloudflare.com`.
+Импорт из `add-user.sh`: ссылка `type=xhttp` и JSON с тем же `extra`. В клиенте должны быть диапазоны паддинга и xmux, не дефолтный залп соединений. Поток `xtls-rprx-vision` не используется.
 
-С включённым VPN Telegram ходит через WARP; MTProto к этому же VPS тоже работает (hairpin `to-mtg`).
+Режим — **global / full tunnel**. SNI: `proxy.qip.zone`. Весь трафик устройства идёт в туннель; деление по приложениям на клиенте не используется.
 
-### Telegram (MTProto) — без VLESS
+`https://ifconfig.me` через туннель показывает адрес Cloudflare, не IP VPS.
 
-Основной способ. Ссылка после `./scripts/gen-mtproto.sh`:
+### Telegram (WEB) — без VLESS
 
-```text
-https://t.me/proxy?server=<VPS_IP>&port=443&secret=<MTPROTO_SECRET>
-```
-
-SNI/FakeTLS-домен: `cloudflare.com` (не путать с Reality SNI `www.cloudflare.com`).
-
-### Telegram (SOCKS5) — запасной канал
-
-Настройки → Прокси → **SOCKS5**: сервер `VPS_IP`, порт `443`, логин/пароль из `.env`.  
-На мобильных операторах SOCKS часто режется DPI — предпочтительнее MTProto.
+Домен `proxy.qip.zone`, порт 443. Ссылку выдаёт Telemt при старте (`docker logs telemt`). Обычный браузер на этом домене видит страницу QIP.
 
 ## Управление доступом
 
@@ -109,9 +85,7 @@ SNI/FakeTLS-домен: `cloudflare.com` (не путать с Reality SNI `www.
 
 **Отозвать VPN:** удалить UUID из `xray/config.json` → `clients[]`, затем `docker compose restart xray`.
 
-**Сменить MTProto secret:** `./scripts/gen-mtproto.sh` (все переподключатся по новой ссылке).
-
-**Сменить пароль SOCKS:** accounts в `socks-in` / `http-in`, `.env` и `proxies` в `mtg/config.toml` → `docker compose up -d --force-recreate`.
+**Сменить Reality:** `./scripts/gen-reality.sh`, затем раздать новые ссылки.
 
 Вести `UUID ↔ сотрудник` отдельно (не в git).
 
@@ -121,6 +95,7 @@ SNI/FakeTLS-домен: `cloudflare.com` (не путать с Reality SNI `www.
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
@@ -137,48 +112,44 @@ sudo systemctl restart sshd
 
 ## Чеклист проверки
 
+### Сайт и WEB-прокси
+
+- [ ] `https://proxy.qip.zone/` открывается без VPN и показывает страницу QIP
+- [ ] Сертификат Let's Encrypt на `proxy.qip.zone`
+- [ ] `tg://webproxy` подключается
+
 ### VPN
 
-- [ ] Клиент подключается (REALITY handshake OK)
-- [ ] `https://ifconfig.me` показывает IP VPS
+- [ ] Клиент подключается (REALITY + XHTTP)
+- [ ] `https://ifconfig.me` показывает IP Cloudflare
 - [ ] YouTube / заблокированные сайты открываются
-
-### Telegram
-
-- [ ] Без VLESS: MTProto-ссылка на `:443` — «подключён»
-- [ ] С VLESS: чаты работают (в логах `vless-reality -> warp` на DC)
-- [ ] `docker compose exec` / `docker logs mtg` + `xray` без массовых ошибок
+- [ ] В логах Xray пользовательские сессии идут в `warp`
 
 ### Сервер
 
-- [ ] `docker compose ps` — `xray`, `mtg` Up
-- [ ] `systemctl is-active sslh-vpn nginx-sni` — active
-- [ ] `ss -tlnp | grep -E ':443|:10440|:10443|:13128|:12080'`
+- [ ] `docker compose ps` — `xray` Up
+- [ ] `docker compose -f telemt-web/docker-compose.yml ps` — `caddy` и `telemt` Up
+- [ ] `ss -tlnp` — публичный `443` у `xray`, `8443` только на `127.0.0.1`
 - [ ] Диск не 100% (`df -h /`)
 
 ### При проблемах
 
-1. VLESS: `pbk`, `sid`, `sni=www.cloudflare.com` в ссылке
-2. MTProto: порт **443**, secret с доменом `cloudflare.com`, VLESS можно оставить включённым
-3. SOCKS с телефона часто нестабилен — используйте MTProto
-4. Нужен **sslh-select**, не sslh-fork (fork плодит процессы под Telegram)
-5. Security Group Selectel: inbound `443/tcp`
+1. VLESS: `pbk`, `sid`, `sni=proxy.qip.zone`, `type=xhttp`, путь `/cdn/img`, в клиенте тот же `extra`
+2. Сайт не открывается: Caddy слушает `127.0.0.1:8443`, Xray `dest` указывает туда же
+3. `ifconfig.me` показывает IP VPS: outbound `warp` не заполнен или трафик ушёл не в него. Пользовательского `freedom` в конфиге нет
+4. Security Group Selectel: inbound `443/tcp` и `80/tcp`
 
 ## Структура репозитория
 
 ```
-docker-compose.yml       # xray + mtg (host network)
-xray/config.json         # шаблон: VLESS + SOCKS + HTTP + WARP + to-mtg
-nginx/nginx.conf         # SNI: cloudflare.com→mtg, www→xray
-mtg/config.toml.example
-deploy/
-  sslh.cfg               # TLS→10440, SOCKS→12080, HTTP→12081
-  sslh-vpn.service       # sslh-select
-  nginx-sni.service
+docker-compose.yml       # xray (host network); mtg за профилем и не стартует
+xray/config.json         # VLESS REALITY XHTTP, выход WARP
+telemt-web/              # Caddy на 127.0.0.1:8443 и Telemt
+deploy/                  # старые sslh и nginx-sni, не используются
+mtg/                     # старый MTProto FakeTLS, не используется
 scripts/
   setup.sh
   gen-reality.sh
-  gen-mtproto.sh
   add-user.sh
   gen-vless-link.sh
 .env.example
@@ -187,4 +158,4 @@ warp/                    # локально, не в git
 
 ## Секреты
 
-Не коммитить: `.env`, `xray/.keys`, живой `xray/config.json` с ключами, `mtg/config.toml`, `warp/`.
+Не коммитить: `.env`, `xray/.keys`, живой `xray/config.json` с ключами, `telemt-web/config/`, `warp/`.

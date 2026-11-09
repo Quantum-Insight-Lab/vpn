@@ -1,0 +1,13 @@
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+proxy.qip.zone {
+	reverse_proxy telemt:18080 {
+		header_up X-Forwarded-For {remote_host}
+		flush_interval -1
+		stream_close_delay 5m
+	}
+}

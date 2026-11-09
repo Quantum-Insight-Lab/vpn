@@ -1,0 +1,19 @@
+html {
+  color-scheme: light;
+  background: #fff;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 40rem;
+  margin: 4rem auto;
+  padding: 0 1rem;
+  background: #fff;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+h1 {
+  font-weight: 600;
+  font-size: 1.5rem;
+}

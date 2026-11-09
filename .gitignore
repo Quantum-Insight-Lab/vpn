@@ -3,3 +3,4 @@ mtg/config.toml
 xray/.keys
 *.local
 warp/
+telemt-web/config/
